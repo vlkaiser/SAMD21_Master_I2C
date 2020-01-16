@@ -15,23 +15,23 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY
   5 .comment      00000059  00000000  00000000  0002002c  2**0
                   CONTENTS, READONLY
-  6 .debug_info   0000f1d9  00000000  00000000  00020085  2**0
+  6 .debug_info   00011dd9  00000000  00000000  00020085  2**0
                   CONTENTS, READONLY, DEBUGGING
-  7 .debug_abbrev 00001a77  00000000  00000000  0002f25e  2**0
+  7 .debug_abbrev 00001b6a  00000000  00000000  00031e5e  2**0
                   CONTENTS, READONLY, DEBUGGING
-  8 .debug_aranges 00000218  00000000  00000000  00030cd5  2**0
+  8 .debug_aranges 00000230  00000000  00000000  000339c8  2**0
                   CONTENTS, READONLY, DEBUGGING
-  9 .debug_ranges 000001b8  00000000  00000000  00030eed  2**0
+  9 .debug_ranges 000001d0  00000000  00000000  00033bf8  2**0
                   CONTENTS, READONLY, DEBUGGING
- 10 .debug_macro  00017b2e  00000000  00000000  000310a5  2**0
+ 10 .debug_macro  00017b34  00000000  00000000  00033dc8  2**0
                   CONTENTS, READONLY, DEBUGGING
- 11 .debug_line   0000592d  00000000  00000000  00048bd3  2**0
+ 11 .debug_line   000059ad  00000000  00000000  0004b8fc  2**0
                   CONTENTS, READONLY, DEBUGGING
- 12 .debug_str    0008a937  00000000  00000000  0004e500  2**0
+ 12 .debug_str    0008b555  00000000  00000000  000512a9  2**0
                   CONTENTS, READONLY, DEBUGGING
- 13 .debug_frame  0000049c  00000000  00000000  000d8e38  2**2
+ 13 .debug_frame  000004dc  00000000  00000000  000dc800  2**2
                   CONTENTS, READONLY, DEBUGGING
- 14 .debug_loc    000019e4  00000000  00000000  000d92d4  2**0
+ 14 .debug_loc    00001abc  00000000  00000000  000dccdc  2**0
                   CONTENTS, READONLY, DEBUGGING
 
 Disassembly of section .text:
@@ -1371,13 +1371,14 @@ void Dummy_Handler(void)
  6e0:	000006e5 	.word	0x000006e5
 
 000006e4 <main>:
- * Support and FAQ: visit <a href="https://www.microchip.com/support/">Microchip Support</a>
- */
-#include <asf.h>
-
+ * @return				- void
+ *
+ * @note				- 
+ ******************************************************************************************************/
 int main (void)
 {
  6e4:	b510      	push	{r4, lr}
+	/* Configure clock sources, GLK generators and board hardware */
 	system_init();
  6e6:	4b07      	ldr	r3, [pc, #28]	; (704 <main+0x20>)
  6e8:	4798      	blx	r3
