@@ -56,10 +56,17 @@ The acknowledge action will be executed when a command is written to CTRLB.CMD b
 Wait for sync
 
 ### Interrupt Handler (breakout from master_transaction)
+This will override the weak definition of the interrupt handler from the device specific header files
+
 Once the Slave Address has been written to the register, we have initiated a transfer and triggered the interrupt.
 The SERCOM2_Handler controls the data transfer process of buffer length (counted by i ) until all data has been transferred.  Then it sets tx_done to true, and returns to the master_transaction function, exiting the while loop.
 
 Repeat similarly for RX: Continue sending bytes until complete. Check for last byte and send ACK/STOP when appropriate.  Return to transaction function.
+
+### Additional
+There's a calculate Baud function (we don't use it)
+Any globals or #defines used in the functions need to be added, as well as any prototypes.
+Otherwise MASTER seems to be completed.  Compiles and loads successfully.
 
 
 
