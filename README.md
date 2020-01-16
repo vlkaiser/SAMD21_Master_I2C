@@ -1,6 +1,11 @@
 # SAMD21_Master_I2C
 Using one SAMD20 and one SAMD21 Xplained pro demo boards, (one as Master, one as Slave) and communicating over I2C.  Example from AT11628
 
+## Documents:
+[AT11628 App Note](https://www.avrfreaks.net/sites/default/files/forum_attachments/Atmel-42631-SAM-D21-SERCOM-I2C-Configura.pdf)
+
+[DS40001882D Datasheet](http://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-Family-DataSheet-DS40001882D.pdf)
+
 ## Create New Project
 Starting with the Demo Board, ideally port to Userboard
 1. New GCC C ASF Board Project
@@ -21,7 +26,7 @@ For the SAMD21J18A:  wrost case (Fast Mode) tr = 100ns, Cb = 400pF,
 ### Clocks
 Master and slave application uses OSC8M as the clock source for Generator 0
 
-### I2C Pin Init
+### I2C Pin and Register Init (I2C_Master_Init)
 Take care - there is an error in 5.1.6 regarding the pin_set_peripheral_function.  See source code
 * Switch pin functionality to peripheral function D (SERCOM-ALT: i2c) per datasheet 
 Follow I2C Configuration Steps in Datasheet (pg 553)
@@ -35,7 +40,13 @@ So if fSCL = 1MHz, fGCLK = 48MHz and trise = 100ns we can calculate that BAUD + 
 Convention seems to be that t_{low} is approx 2x t_{high} (per data sheets)
 Therefore, BAUD = 11, BAUDLOW = 22.
 
-## Note: It is recommended to set the slave's baud rate higher than the master baud rate and give a sufficient margin to meet the I2C timing.
+### Note: It is recommended to set the slave's baud rate higher than the master baud rate and give a sufficient margin to meet the I2C timing.
+
+Interrupt Enable on Master-on-bus and Slave-on-bus. pg610/611 of datasheet
+Enable SERCOM interrupts
+
+
+
 
 
 
