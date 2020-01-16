@@ -27,13 +27,23 @@
 #include <asf.h>
 
 #define FAST_MODE_PLUS	0x01		// SPEED bit field
+#define SLAVE_ADDR	0x1A			// SLAVE device Address
+
+#define BUF_SIZE	10
+
+
+/* GLOBALS */
+uint8_t i;
+volatile bool tx_done = false, rx_done = false;
+uint8_t tx_buf[BUF_SIZE] = {1, 2, 3};
+uint8_t rx_buf[BUF_SIZE];
 
 /* Prototypes */
 void i2c_clock_init(void);
 static void pin_set_peripheral_function(uint32_t pinmux);
 void i2c_pin_init(void);
 void i2c_master_init(void);
-
+void i2c_master_transaction(void);
 
 /******************************************************************************************************
  * @fn					- i2c_clock_init
@@ -103,8 +113,117 @@ void i2c_master_init()
 	enabled requires synchronization. When written, the SYNCBUSY.SYSOP bit will be set until
 	synchronization is complete.*/	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	/* BAUDLOW sets SCL low time, BAUD sets SCL high time 	   fSCL = 1MHz, fGCLK = 48MHz (default), trise = 100ns.	   Using datasheet calc, BAUD + BAUDLOW = 33 (tlow =~ 2x thigh) */	SERCOM2->I2CM.BAUD.reg = SERCOM_I2CM_BAUD_BAUD(11) | SERCOM_I2CM_BAUD_BAUDLOW(22);	/* Wait for Sync */	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	/* Enabled SERCOM2 Peripheral */	SERCOM2->I2CM.CTRLA.reg |= SERCOM_I2CM_CTRLA_ENABLE;	/* SERCOM Enable synchronization busy (Wait) */
 	while((SERCOM2->I2CM.SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_ENABLE));	/* BusState to Idle (Forced) eg when in unknown state*/	SERCOM2->I2CM.STATUS.bit.BUSSTATE = 0x1;	/* Wait for Sync */	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	/* Enable Interrupt: Master on bus, Slave on Bus [INTterrupt ENable SET 	   Enable Receive Ready Interrupt Master position, slave position pg 610*/	SERCOM2->I2CM.INTENSET.reg = SERCOM_I2CM_INTENSET_MB | SERCOM_I2CM_INTENSET_SB;	/* Enable SERCOM2 interrupt handler */
-	system_interrupt_enable(SERCOM2_IRQn);}
+	system_interrupt_enable(SERCOM2_IRQn);}/******************************************************************************************************
+ * @fn					- i2c_master_transaction
+ * @brief				- Perform a transaction with the connected slave device
+ * @param[in]			- void
+ * @return				- void
+ *
+ * @note				- 
+ *						
+ ******************************************************************************************************/
+void i2c_master_transaction(void)
+{
+	i = 0;
+	
+	/* Acknowledge behavior: 0 = send ACK in ACKACT bit CTRLB */
+	SERCOM2->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
 
+	/* Wait for Sync */	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+
+	/* load I2C Slave Address into reg, and Write(0) in 0th bit to Slave.  Initiate Transfer */
+	SERCOM2->I2CM.ADDR.reg = (SLAVE_ADDR << 1) | 0;
+	while(!tx_done);			//wait for transmit complete (Interrupt Handler)
+	i =0;
+
+	/* ACK is sent */
+	SERCOM2->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
+
+	/* Wait for Sync */	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+
+	/* Read (1) in 0th bit, from Slave (ACK) */
+	SERCOM2->I2CM.ADDR.reg = (SLAVE_ADDR << 1) | 1;
+	while(!tx_done);			//wait for transmit complete (Interrupt Handler)
+
+	/* Interrupts are cleared MS/SL */
+	SERCOM2->I2CM.INTENCLR.reg = SERCOM_I2CM_INTENCLR_MB | SERCOM_I2CM_INTENCLR_SB;
+}
+
+/******************************************************************************************************
+ * @fn					- SERCOM2_Handler
+ * @brief				- After transmitting address to slave and receiving ACK/NACK
+ * @param[in]			- void
+ * @return				- void
+ *
+ * @note				- Interrupt handler during while(tx_done == true) in master_transaction
+ *						
+ ******************************************************************************************************/
+ void SERCOM2_Handler(void)
+ {
+	/* Check for master-on-bus interrupt set condition */
+	if (SERCOM2->I2CM.INTFLAG.bit.MB)
+	{
+		/* Finished TX? (No more i to send?) */
+		if (i == BUF_SIZE)
+		{
+			/* After transferring the last byte, send stop condition */
+			SERCOM2->I2CM.CTRLB.bit.CMD = 0x3;
+		
+			/* Wait for Sync */			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+
+			tx_done = true;
+			i = 0;
+		} else {
+			/* Not done. Place the data from the TX buffer to the DATA register */
+			SERCOM2->I2CM.DATA.reg = tx_buf[i++];
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	
+		}
+	}
+	/* Check for slave-on-bus interrupt set condition */
+	if (SERCOM2->I2CM.INTFLAG.bit.SB)
+	{
+		/* Finished RX? (No more i to send?) */
+		if (i == (BUF_SIZE - 1))
+		{
+			/* NACK Should be sent BEFORE reading the last byte */
+			SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
+						/* Wait for Sync */			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+			
+			/* Send stop condition */
+			SERCOM2->I2CM.CTRLB.bit.CMD = 0x3;
+
+			/* Wait for Sync */			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	
+			
+			/* Read last Data byte from Register into buffer */	
+			rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
+
+			/* Wait for Sync */
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+
+			rx_done = true;
+			
+			} else {
+			/* Not done. Place the data from the DATA register into the RX BUFFER */
+			SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
+			
+			/* Wait for Sync */
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+			
+			/* Read data from Register into buffer */
+			rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
+			
+			/* Wait for Sync */
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+
+			/* Send ACK after reading Each Byte */
+			SERCOM2->I2CM.CTRLB.bit.CMD = 0x2;
+
+			/* Wait for Sync */
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+		}
+	}
+}
+	
 
 /******************************************************************************************************
  * @fn					- MAIN
