@@ -26,10 +26,12 @@
 ***************************************************************************************************************************/
 #include <asf.h>
 
-#define FAST_MODE_PLUS	0x01		// SPEED bit field
-#define SLAVE_ADDR	0x1A			// SLAVE device Address
+#define STANDARD_MODE_FAST_MODE	0x0		// I2C Speed Mode Standard
+#define FAST_MODE_PLUS	0x01			// I2C SPEED bit field
+#define HIGHSPEED_MODE	0x02			// I2C SPEED bit field
+#define SLAVE_ADDR	0x12				// SLAVE device Address
 
-#define BUF_SIZE	10
+#define BUF_SIZE	3					// TX/RX Buffer Size
 
 
 /* GLOBALS */
@@ -42,6 +44,7 @@ uint8_t rx_buf[BUF_SIZE];
 void i2c_clock_init(void);
 static void pin_set_peripheral_function(uint32_t pinmux);
 void i2c_pin_init(void);
+uint32_t calculate_baud(uint32_t fgclk, uint32_t fscl);
 void i2c_master_init(void);
 void i2c_master_transaction(void);
 
@@ -95,6 +98,27 @@ void i2c_pin_init()
 	pin_set_peripheral_function(PINMUX_PA08D_SERCOM2_PAD0);	
 	pin_set_peripheral_function(PINMUX_PA09D_SERCOM2_PAD1);
 }
+
+/******************************************************************************************************
+ * @fn					- calculate_baud
+ * @brief				- Calculate the BAUD value using f_{gclk},f_{scl}, t_{rise}
+ * @param[in]			- fgclk
+ *						- fscl
+ *
+ * @return				- f_baud
+ *
+ * @note				- FSCL = fGCLK / (10 + BAUD +BAUDLOW + fGCLKTRISE )
+ *						
+ ******************************************************************************************************/
+uint32_t calculate_baud(uint32_t fgclk, uint32_t fscl)
+{
+	float f_temp, f_baud;
+	f_temp = ((float)fgclk/(float)fscl) - (((float)fgclk/(float)1000000)*0.3);
+	f_baud = (f_temp/2)-5;
+
+	return ((uint32_t)f_baud);
+}
+
 
 /******************************************************************************************************
  * @fn					- i2c_master_init
@@ -156,7 +180,7 @@ void i2c_master_transaction(void)
  * @return				- void
  *
  * @note				- Interrupt handler during while(tx_done == true) in master_transaction
- *						
+ *						- Overrides weak definition
  ******************************************************************************************************/
  void SERCOM2_Handler(void)
  {
@@ -185,41 +209,42 @@ void i2c_master_transaction(void)
 		/* Finished RX? (No more i to send?) */
 		if (i == (BUF_SIZE - 1))
 		{
-			/* NACK Should be sent BEFORE reading the last byte */
-			SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
-						/* Wait for Sync */			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+				/* NACK Should be sent BEFORE reading the last byte */
+				SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
+							/* Wait for Sync */				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 			
-			/* Send stop condition */
-			SERCOM2->I2CM.CTRLB.bit.CMD = 0x3;
+				/* Send stop condition */
+				SERCOM2->I2CM.CTRLB.bit.CMD = 0x3;
 
-			/* Wait for Sync */			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	
+				/* Wait for Sync */
+				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	
 			
-			/* Read last Data byte from Register into buffer */	
-			rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
+				/* Read last Data byte from Register into buffer */	
+				rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
 
-			/* Wait for Sync */
-			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
-
-			rx_done = true;
+				/* Wait for Sync */
+				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+			
+				rx_done = true;
 			
 			} else {
-			/* Not done. Place the data from the DATA register into the RX BUFFER */
-			SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
+				/* Not done. Place the data from the DATA register into the RX BUFFER */
+				SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
 			
-			/* Wait for Sync */
-			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+				/* Wait for Sync */
+				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 			
-			/* Read data from Register into buffer */
-			rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
+				/* Read data from Register into buffer */
+				rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
 			
-			/* Wait for Sync */
-			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+				/* Wait for Sync */
+				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 
-			/* Send ACK after reading Each Byte */
-			SERCOM2->I2CM.CTRLB.bit.CMD = 0x2;
+				/* Send ACK after reading Each Byte */
+				SERCOM2->I2CM.CTRLB.bit.CMD = 0x2;
 
-			/* Wait for Sync */
-			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+				/* Wait for Sync */
+				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 		}
 	}
 }
@@ -237,8 +262,10 @@ int main (void)
 {
 	/* Configure clock sources, GLK generators and board hardware */
 	system_init();
-
-	/* Insert application code here, after the board has been initialized. */
+	i2c_clock_init();
+	i2c_pin_init();
+	i2c_master_init();
+	i2c_master_transaction();
 
 	/* This skeleton code simply sets the LED to the state of the button. */
 	while (1) {
