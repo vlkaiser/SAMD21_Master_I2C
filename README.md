@@ -45,6 +45,23 @@ Therefore, BAUD = 11, BAUDLOW = 22.
 Interrupt Enable on Master-on-bus and Slave-on-bus. pg610/611 of datasheet
 Enable SERCOM interrupts
 
+## Transactions
+### Setup
+1. Create a global iteration count variable (uint8_t i)
+2. Create global boolean values rx_done, tx_done (init to false)
+### CTRLB Register - ACK
+Setup the ACK behavio.  The ACKACT field is used to define the I2C master’s acknowledge behavior after a data
+byte is received from the I2C slave. 
+The acknowledge action will be executed when a command is written to CTRLB.CMD bits or after a transfer with Smart Mode is enabled.  After a data byte is received.
+Wait for sync
+
+### Interrupt Handler (breakout from master_transaction)
+Once the Slave Address has been written to the register, we have initiated a transfer and triggered the interrupt.
+The SERCOM2_Handler controls the data transfer process of buffer length (counted by i ) until all data has been transferred.  Then it sets tx_done to true, and returns to the master_transaction function, exiting the while loop.
+
+Repeat similarly for RX: Continue sending bytes until complete. Check for last byte and send ACK/STOP when appropriate.  Return to transaction function.
+
+
 
 
 
