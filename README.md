@@ -20,11 +20,11 @@ Starting with the Demo Board, ideally port to Userboard
 * SAMD21 Xplained pro has on-board 4.7k pullup resistors on I2C lines (R305, R306) (Left of PB06 on EXT1) which have been replaced with 2k pullup resistors to improve signal timing. 
 <a href="https://www.codecogs.com/eqnedit.php?latex=Rp_{max}&space;=&space;[t_{r}&space;*&space;(0.8473&space;*&space;C_{bus})]" target="_blank"><img src="https://latex.codecogs.com/gif.latex?Rp_{max}&space;=&space;[t_{r}&space;*&space;(0.8473&space;*&space;C_{bus})]" title="Rp_{max} = [t_{r} * (0.8473 * C_{bus})]" /></a>
 
-For the SAMD21J18A:  wrost case (Fast Mode) tr = 100ns, Cb = 400pF, 
+For the SAMD21J18A:  worst case (Fast Mode) tr = 100ns, Cb = 400pF, 
 
 ## Configuration
 ### Clocks
-Master and slave application uses OSC8M as the clock source for Generator 0
+Master and slave application uses OSC8M as the clock source for Generator 0 (Undivided = 8MHz)
 
 ### I2C Pin and Register Init (I2C_Master_Init)
 Take care - there is an error in 5.1.6 regarding the pin_set_peripheral_function.  See source code
