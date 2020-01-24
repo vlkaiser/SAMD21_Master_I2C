@@ -1508,12 +1508,12 @@ void i2c_pin_init()
 	*	- RUNSTDBY bit as 0x01, Generic clock is enabled in all sleep modes (any interrupt can wake up the device)
 	*	- MODE bitfield to 0x5, SERCOM2 is configured as I2C Master
 	*/
-	SERCOM2->I2CM.CTRLA.reg = //SERCOM_I2CM_CTRLA_SPEED(STANDARD_MODE_FAST_MODE)	|
+	SERCOM2->I2CM.CTRLA.reg =	SERCOM_I2CM_CTRLA_SPEED(0x01)			|
  784:	4b14      	ldr	r3, [pc, #80]	; (7d8 <i2c_master_init+0x54>)
  786:	4a15      	ldr	r2, [pc, #84]	; (7dc <i2c_master_init+0x58>)
  788:	601a      	str	r2, [r3, #0]
-								SERCOM_I2CM_CTRLA_SDAHOLD(0x2)			|
 								SERCOM_I2CM_CTRLA_RUNSTDBY				|
+								SERCOM_I2CM_CTRLA_SCLSM					|
 								SERCOM_I2CS_CTRLA_MODE_I2C_MASTER;
 
 	/* Enable Smart Mode - Will ACK when DATA.DATA is read*/
@@ -1596,7 +1596,7 @@ static inline void system_interrupt_enable(
 }
  7d6:	4770      	bx	lr
  7d8:	42001000 	.word	0x42001000
- 7dc:	00200094 	.word	0x00200094
+ 7dc:	09200094 	.word	0x09200094
  7e0:	e000e100 	.word	0xe000e100
 
 000007e4 <i2c_master_transaction>:
