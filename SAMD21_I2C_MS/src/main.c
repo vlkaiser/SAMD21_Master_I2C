@@ -31,6 +31,7 @@
 #define HIGHSPEED_MODE			0x02			// I2C SPEED bit field
 #define SLAVE_ADDR				0x12			// SLAVE device Address
 
+//Settings for BAUD Rate and I2C Transaction Speed
 #define F_GCLK			48000000			//48MHz
 #define F_SCL_STD		100000				//100khz	- w/ STD or FastMode+ = 20khz
 #define F_SCL_FAST		400000				//400khz - w/ STD or FastMode+ = 76khz
@@ -120,7 +121,7 @@ void i2c_pin_init()
  ******************************************************************************************************/
 uint32_t calculate_baud(uint32_t fgclk, uint32_t fscl)
 {
-	float f_temp, f_baud;
+	float f_baud;
 	f_baud = (((float)fgclk/(float)fscl) - 10 - ((float)fgclk*0.0000003))/2;
 
 	return ((uint32_t)f_baud);
