@@ -169,9 +169,9 @@ void i2c_master_init()
 	*	- MODE bitfield to 0x5, SERCOM2 is configured as I2C Master
 	*/
 	SERCOM2->I2CM.CTRLA.reg = SERCOM_I2CM_CTRLA_SPEED(STANDARD_MODE_FAST_MODE)	|
-								SERCOM_I2CM_CTRLA_SDAHOLD(0x2)			|
-								SERCOM_I2CM_CTRLA_RUNSTDBY				|
-								//SERCOM_I2CM_CTRLA_SCLSM					|
+								SERCOM_I2CM_CTRLA_SDAHOLD(0x2)					|
+								SERCOM_I2CM_CTRLA_RUNSTDBY						|
+								//SERCOM_I2CM_CTRLA_SCLSM						|
 								SERCOM_I2CS_CTRLA_MODE_I2C_MASTER;
 
 	/* Enable Smart Mode - Will ACK when DATA.DATA is read*/
@@ -206,6 +206,8 @@ void i2c_master_init()
 
 	/* Enable Interrupt: Master on bus, Slave on Bus [INTterrupt ENable SET 
 	   Enable Receive Ready Interrupt Master position, slave position pg 610*/
+	   
+	   //So I guess when the slave writes the slave address into the register (which then goes for write) - this interrupt is triggered, which kicks to the SERCOM2_Handler
 	SERCOM2->I2CM.INTENSET.reg = SERCOM_I2CM_INTENSET_MB | SERCOM_I2CM_INTENSET_SB;
 
 	/* Enable SERCOM2 interrupt handler */
@@ -232,9 +234,13 @@ void i2c_master_transaction(void)
 	/* Wait for Sync */	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 
 	/* load I2C Slave Address into reg, and Write(0) in 0th bit to Slave.  Initiate Transfer */
-	SERCOM2->I2CM.ADDR.reg = (SLAVE_ADDR << 1) | 0;
+	//This should trip the SERCOM2_Handler in the Slave
+	SERCOM2->I2CM.ADDR.reg = (SLAVE_ADDR << 1);
+	
+	delay_ms(100);
+
 	while(!tx_done);			//wait for transmit complete (Interrupt Handler)
-	i =0;
+	i = 0;
 
 	/* ACK is sent */
 	SERCOM2->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
@@ -269,7 +275,8 @@ void i2c_master_transaction(void)
 			/* After transferring the last byte, send stop condition */
 			SERCOM2->I2CM.CTRLB.bit.CMD = 0x3;
 		
-			/* Wait for Sync */			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+			/* Wait for Sync */			
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 
 			tx_done = true;
 			i = 0;
@@ -339,6 +346,9 @@ int main (void)
 	/* Configure clock sources, GLK generators and board hardware */
 	system_init();
 	i2c_clock_init();
+		
+		SysTick_Config(system_gclk_gen_get_hz(GCLK_GENERATOR_0));
+	
 	i2c_pin_init();
 	i2c_master_init();
 	i2c_master_transaction();
@@ -349,6 +359,8 @@ int main (void)
 		if (port_pin_get_input_level(BUTTON_0_PIN) == BUTTON_0_ACTIVE) {
 			/* Yes, so turn LED on. */
 			port_pin_set_output_level(LED_0_PIN, LED_0_ACTIVE);
+			delay_ms(100);
+			i2c_master_transaction();
 		} else {
 			/* No, so turn LED off. */
 			port_pin_set_output_level(LED_0_PIN, !LED_0_ACTIVE);
