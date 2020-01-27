@@ -32,6 +32,8 @@
  */
 
 #include "samd21.h"
+#include <asf.h>
+
 
 /* Initialize segments */
 extern uint32_t _sfixed;
@@ -268,5 +270,12 @@ void Reset_Handler(void)
 void Dummy_Handler(void)
 {
         while (1) {
+			for (uint8_t i = 0; i < 3; i++) {
+				port_pin_set_output_level(LED_0_PIN, LED_0_ACTIVE);
+				delay_ms (10);
+				port_pin_set_output_level(LED_0_PIN, !LED_0_ACTIVE);
+				delay_ms (240);
+				}
+			delay_ms(1000);
         }
 }

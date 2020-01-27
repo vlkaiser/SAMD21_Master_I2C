@@ -235,9 +235,9 @@ void i2c_master_transaction(void)
 
 	/* load I2C Slave Address into reg, and Write(0) in 0th bit to Slave.  Initiate Transfer */
 	//This should trip the SERCOM2_Handler in the Slave
-	SERCOM2->I2CM.ADDR.reg = (SLAVE_ADDR << 1);
+	SERCOM2->I2CM.ADDR.reg = (SLAVE_ADDR << 1) | 0;
 	
-	delay_ms(100);
+	//delay_ms(100);
 
 	while(!tx_done);			//wait for transmit complete (Interrupt Handler)
 	i = 0;
@@ -245,14 +245,16 @@ void i2c_master_transaction(void)
 	/* ACK is sent */
 	SERCOM2->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
 
-	/* Wait for Sync */	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+	/* Wait for Sync */	
+	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 
 	/* Read (1) in 0th bit, from Slave (ACK) */
 	SERCOM2->I2CM.ADDR.reg = (SLAVE_ADDR << 1) | 1;
-	while(!tx_done);			//wait for transmit complete (Interrupt Handler)
+	while(!rx_done);			//wait for receive complete (Interrupt Handler)
 
 	/* Interrupts are cleared MS/SL */
 	SERCOM2->I2CM.INTENCLR.reg = SERCOM_I2CM_INTENCLR_MB | SERCOM_I2CM_INTENCLR_SB;
+	
 }
 
 /******************************************************************************************************
@@ -294,7 +296,9 @@ void i2c_master_transaction(void)
 		{
 				/* NACK Should be sent BEFORE reading the last byte */
 				SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
-							/* Wait for Sync */				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+				
+				/* Wait for Sync */				
+				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 			
 				/* Send stop condition */
 				SERCOM2->I2CM.CTRLB.bit.CMD = 0x3;
@@ -311,8 +315,8 @@ void i2c_master_transaction(void)
 				rx_done = true;
 			
 			} else {
-				/* Not done. Place the data from the DATA register into the RX BUFFER */
-				SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
+				/* send ACK ?*/
+				SERCOM2->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
 			
 				/* Wait for Sync */
 				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
@@ -331,7 +335,11 @@ void i2c_master_transaction(void)
 		}
 	}
 }
-	
+
+void SysTick_Handler(void) 
+{
+	port_pin_toggle_output_level(LED_0_PIN);
+}
 
 /******************************************************************************************************
  * @fn					- MAIN
@@ -344,11 +352,11 @@ void i2c_master_transaction(void)
 int main (void)
 {
 	/* Configure clock sources, GLK generators and board hardware */
+	//SysTick_Config(system_gclk_gen_get_hz(GCLK_GENERATOR_0));
+
 	system_init();
+	delay_init();
 	i2c_clock_init();
-		
-		SysTick_Config(system_gclk_gen_get_hz(GCLK_GENERATOR_0));
-	
 	i2c_pin_init();
 	i2c_master_init();
 	i2c_master_transaction();
@@ -356,14 +364,18 @@ int main (void)
 	/* This skeleton code simply sets the LED to the state of the button. */
 	while (1) {
 		/* Is button pressed? */
-		if (port_pin_get_input_level(BUTTON_0_PIN) == BUTTON_0_ACTIVE) {
+		//delay_ms(100);
+		if ( port_pin_get_input_level(BUTTON_0_PIN) == BUTTON_0_ACTIVE ) 
+		{
 			/* Yes, so turn LED on. */
-			port_pin_set_output_level(LED_0_PIN, LED_0_ACTIVE);
-			delay_ms(100);
-			i2c_master_transaction();
+			port_pin_set_output_level( LED_0_PIN, LED_0_ACTIVE );
+			//delay_ms(100);
+			//i2c_master_transaction();
+
 		} else {
 			/* No, so turn LED off. */
-			port_pin_set_output_level(LED_0_PIN, !LED_0_ACTIVE);
+			port_pin_set_output_level( LED_0_PIN, !LED_0_ACTIVE );
 		}
 	}
+	delay_ms(1000);
 }
