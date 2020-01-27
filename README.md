@@ -31,12 +31,14 @@ Take care - there is an error in 5.1.6 regarding the pin_set_peripheral_function
 * Switch pin functionality to peripheral function D (SERCOM-ALT: i2c) per datasheet 
 Follow I2C Configuration Steps in Datasheet (pg 553)
 
-* Configure CTRL Reg A: i2C Fast Mode Plus, SDA Hold (300-600ns); Runstandby clock enabled in sleep; I2C Config as Master
+* Configure CTRL Reg A: i2C STANDARD_MODE_FAST_MODE (100-400khz), SDA Hold (300-600ns); Runstandby clock enabled in sleep; I2C Config as Master
 * Configure CTRL Reg B: SMart Mode Enabled
 * Configure Sync busy (wait until not busy)
-* Configure BAUD rate: We are configuring the SCL clock.  If we want to control the Low period, we need BAUDLOW:
-<a href="https://www.codecogs.com/eqnedit.php?latex=f_{SCL}&space;=&space;\frac{f_{GCLK}}{10&space;&plus;&space;BAUD&space;&plus;&space;BAUDLOW&space;&plus;&space;f_{GCLK}\cdot&space;T_{RISE}}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?f_{SCL}&space;=&space;\frac{f_{GCLK}}{10&space;&plus;&space;BAUD&space;&plus;&space;BAUDLOW&space;&plus;&space;f_{GCLK}\cdot&space;T_{RISE}}" title="f_{SCL} = \frac{f_{GCLK}}{10 + BAUD + BAUDLOW + f_{GCLK}\cdot T_{RISE}}" /></a>)
-So if fSCL = 1MHz, fGCLK = 48MHz and trise = 100ns we can calculate that BAUD + BAUDLOW = about 33
+* Configure BAUD rate: We are configuring the SCL clock.  
+<a href="https://www.codecogs.com/eqnedit.php?latex=f_{SCL}&space;=&space;\frac{f_{GCLK}}{10&space;&plus;&space;2BAUD&space;&plus;&space;f_{GCLK}\cdot&space;T_{RISE}}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?f_{SCL}&space;=&space;\frac{f_{GCLK}}{10&space;&plus;&space;2BAUD&space;&plus;&space;f_{GCLK}\cdot&space;T_{RISE}}" title="f_{SCL} = \frac{f_{GCLK}}{10 + 2BAUD + f_{GCLK}\cdot T_{RISE}}" /></a>)
+So if fSCL = 1MHz, fGCLK = 48MHz and trise = 100ns we can calculate that 2BAUD = about 33
+
+If BAUD and BAUDLOW are being configured separately (eg for high speed or fast+ mode):
 Convention seems to be that t_{low} is approx 2x t_{high} (per data sheets)
 Therefore, BAUD = 11, BAUDLOW = 22.
 
@@ -64,9 +66,9 @@ The SERCOM2_Handler controls the data transfer process of buffer length (counted
 Repeat similarly for RX: Continue sending bytes until complete. Check for last byte and send ACK/STOP when appropriate.  Return to transaction function.
 
 ### Additional
-There's a calculate Baud function (we don't use it)
+There's a calculate Baud function to calculate baud rate integer. Use that for lower speeds, use the high/low for higher speeds (unsupported by SAMD20)
 Any globals or #defines used in the functions need to be added, as well as any prototypes.
-Otherwise MASTER seems to be completed.  Compiles and loads successfully.
+Otherwise MASTER seems to be completed.  Compiles and loads successfully; works with SAMD20 I2C Slave
 
 
 
