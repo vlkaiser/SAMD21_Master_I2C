@@ -70,7 +70,7 @@ void i2c_clock_init()
 	uint32_t gclk_index = SERCOM2_GCLK_ID_CORE;
 
 	system_apb_clock_set_mask(SYSTEM_CLOCK_APB_APBC, PM_APBCMASK_SERCOM2);	//Turn on module in Power Manager - peripheral bus C
-	system_gclk_chan_get_config_defaults((&gclk_chan_conf));				//Turn on generic clock for i2c: Default is generator0
+	system_gclk_chan_get_config_defaults(&gclk_chan_conf);				//Turn on generic clock for i2c: Default is generator0
 	system_gclk_chan_set_config(gclk_index, &gclk_chan_conf);				//Write defaults to SERCOM2
 	system_gclk_chan_enable(gclk_index);									//Enable
 }
@@ -181,6 +181,7 @@ void i2c_master_init()
 	enabled requires synchronization. When written, the SYNCBUSY.SYSOP bit will be set until synchronization is complete.*/
 	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 
+
 	/* BAUDLOW sets SCL low time, BAUD sets SCL high time 
 	   fSCL = 1MHz, fGCLK = 48MHz (default), trise = 100ns.
 	   Using datasheet calc, BAUD + BAUDLOW = 33 (tlow =~ 2x thigh) 
@@ -196,7 +197,7 @@ void i2c_master_init()
 	SERCOM2->I2CM.CTRLA.reg |= SERCOM_I2CM_CTRLA_ENABLE;
 
 	/* SERCOM Enable synchronization busy (Wait) */
-	while((SERCOM2->I2CM.SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_ENABLE));
+	while(SERCOM2->I2CM.SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_ENABLE);
 
 	/* BusState to Idle (Forced) eg when in unknown state*/
 	SERCOM2->I2CM.STATUS.bit.BUSSTATE = 0x1;
@@ -231,14 +232,13 @@ void i2c_master_transaction(void)
 	/* Acknowledge behavior: 0 = send ACK in ACKACT bit CTRLB */
 	SERCOM2->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
 
-	/* Wait for Sync */	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+	/* Wait for Sync */	
+	while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 
 	/* load I2C Slave Address into reg, and Write(0) in 0th bit to Slave.  Initiate Transfer */
 	//This should trip the SERCOM2_Handler in the Slave
 	SERCOM2->I2CM.ADDR.reg = (SLAVE_ADDR << 1) | 0;
 	
-	//delay_ms(100);
-
 	while(!tx_done);			//wait for transmit complete (Interrupt Handler)
 	i = 0;
 
@@ -252,9 +252,22 @@ void i2c_master_transaction(void)
 	SERCOM2->I2CM.ADDR.reg = (SLAVE_ADDR << 1) | 1;
 	while(!rx_done);			//wait for receive complete (Interrupt Handler)
 
-	/* Interrupts are cleared MS/SL */
+	//data can only be r/w when clkhold is held low by master
+	//SERCOM2->I2CM.CTRLB.bit.CMD = 0x0;
+	//while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+	//SERCOM2->I2CM.INTENSET.reg |= 0x01;	//set MB
+	//SERCOM2->I2CM.STATUS.bit.BUSSTATE = 0x1;
+	SERCOM2->I2CM.ADDR.reg &= 0;
+	SERCOM2->I2CM.DATA.reg &= 0;
+
+	/* Interrupts and flags are cleared MS/SL */
 	SERCOM2->I2CM.INTENCLR.reg = SERCOM_I2CM_INTENCLR_MB | SERCOM_I2CM_INTENCLR_SB;
+
+
+
 	
+	rx_done = false;
+	tx_done = false;
 }
 
 /******************************************************************************************************
@@ -282,56 +295,61 @@ void i2c_master_transaction(void)
 
 			tx_done = true;
 			i = 0;
-		} else {
+		} 
+		else 
+		{
 			/* Not done. Place the data from the TX buffer to the DATA register */
 			SERCOM2->I2CM.DATA.reg = tx_buf[i++];
 			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	
 		}
 	}
+
 	/* Check for slave-on-bus interrupt set condition */
 	if (SERCOM2->I2CM.INTFLAG.bit.SB)
 	{
 		/* Finished RX? (No more i to send?) */
 		if (i == (BUF_SIZE - 1))
 		{
-				/* NACK Should be sent BEFORE reading the last byte */
-				SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
+			/* NACK Should be sent BEFORE reading the last byte */
+			SERCOM2->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
 				
-				/* Wait for Sync */				
-				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+			/* Wait for Sync */				
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 			
-				/* Send stop condition */
-				SERCOM2->I2CM.CTRLB.bit.CMD = 0x3;
+			/* Send stop condition */
+			SERCOM2->I2CM.CTRLB.bit.CMD = 0x3;
 
-				/* Wait for Sync */
-				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	
+			/* Wait for Sync */
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);	
 			
-				/* Read last Data byte from Register into buffer */	
-				rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
+			/* Read last Data byte from Register into buffer */	
+			rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
 
-				/* Wait for Sync */
-				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+			/* Wait for Sync */
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 			
-				rx_done = true;
+			rx_done = true;
 			
-			} else {
-				/* send ACK ?*/
-				SERCOM2->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
+		} 
+		else 
+		{
+			/* send ACK ?*/
+			SERCOM2->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
 			
-				/* Wait for Sync */
-				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+			/* Wait for Sync */
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 			
-				/* Read data from Register into buffer */
-				rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
+			/* Read data from Register into buffer */
+			rx_buf[i++] = SERCOM2->I2CM.DATA.reg;
 			
-				/* Wait for Sync */
-				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+			/* Wait for Sync */
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 
-				/* Send ACK after reading Each Byte */
-				SERCOM2->I2CM.CTRLB.bit.CMD = 0x2;
+			/* Send ACK after reading Each Byte */
+			SERCOM2->I2CM.CTRLB.bit.CMD = 0x2;
 
-				/* Wait for Sync */
-				while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+			/* Wait for Sync */
+			while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
 		}
 	}
 }
@@ -352,30 +370,39 @@ void SysTick_Handler(void)
 int main (void)
 {
 	/* Configure clock sources, GLK generators and board hardware */
-	//SysTick_Config(system_gclk_gen_get_hz(GCLK_GENERATOR_0));
-
+	
 	system_init();
-	delay_init();
+	
+	//SysTick_Config(system_gclk_gen_get_hz(GCLK_GENERATOR_0));
+	//delay_init();
+	
 	i2c_clock_init();
 	i2c_pin_init();
 	i2c_master_init();
-	i2c_master_transaction();
+	
+	//i2c_master_transaction();
 
 	/* This skeleton code simply sets the LED to the state of the button. */
-	while (1) {
+	while (1) 
+	{
 		/* Is button pressed? */
-		//delay_ms(100);
+
 		if ( port_pin_get_input_level(BUTTON_0_PIN) == BUTTON_0_ACTIVE ) 
 		{
 			/* Yes, so turn LED on. */
-			port_pin_set_output_level( LED_0_PIN, LED_0_ACTIVE );
-			//delay_ms(100);
-			//i2c_master_transaction();
+			//port_pin_set_output_level( LED_0_PIN, LED_0_ACTIVE );
+			//SERCOM2->I2CM.STATUS.bit.BUSSTATE = 0x1;
+			//while(SERCOM2->I2CM.SYNCBUSY.bit.SYSOP);
+		
+			i2c_master_transaction();
 
-		} else {
+			port_pin_set_output_level( LED_0_PIN, LED_0_ACTIVE );
+		} 
+		else 
+		{
 			/* No, so turn LED off. */
 			port_pin_set_output_level( LED_0_PIN, !LED_0_ACTIVE );
 		}
 	}
-	delay_ms(1000);
+
 }
